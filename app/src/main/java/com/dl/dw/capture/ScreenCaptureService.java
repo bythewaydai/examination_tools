@@ -15,6 +15,7 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -25,7 +26,13 @@ import android.view.OrientationEventListener;
 import android.view.WindowManager;
 
 
+import com.blankj.utilcode.util.BusUtils;
 import com.blankj.utilcode.util.ImageUtils;
+import com.blankj.utilcode.util.SDCardUtils;
+import com.dl.dw.event.ScanResultEvent;
+import com.googlecode.tesseract.android.TessBaseAPI;
+
+import org.greenrobot.eventbus.EventBus;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -35,6 +42,8 @@ import java.util.Objects;
 
 public class ScreenCaptureService extends Service {
 
+    public static final String trainInitPath= SDCardUtils.getSDCardPathByEnvironment() + File.separator + Environment.DIRECTORY_DOWNLOADS+File.separator+"xScan" + File.separator+"train";
+    public static final String trainFileName = "chi_sim.traineddata";
     private static final String TAG = "ScreenCaptureService";
     private static final String RESULT_CODE = "RESULT_CODE";
     private static final String DATA = "DATA";
@@ -106,9 +115,13 @@ public class ScreenCaptureService extends Service {
                     fos = new FileOutputStream(mStoreDir + "/myscreen_" + IMAGES_PRODUCED + ".png");
                     bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
                     ImageUtils.save2Album(bitmap, Bitmap.CompressFormat.PNG);
+//                    processImageToText(bitmap);
+                    String content=processImageToText(bitmap);
+                    EventBus.getDefault().post(new ScanResultEvent(content));
 
                     IMAGES_PRODUCED++;
                     Log.e(TAG, "captured image: " + IMAGES_PRODUCED);
+                    Log.e(TAG, "captured content: " + content);
                 }
 
             } catch (Exception e) {
@@ -127,6 +140,35 @@ public class ScreenCaptureService extends Service {
                 }
 
             }
+        }
+
+
+        TessBaseAPI baseApi;
+        private void initTess(){
+            baseApi = new TessBaseAPI();
+            baseApi.init(trainInitPath, "chi_sim");
+        }
+        private String processImageToText(Bitmap bitmap){
+            if(baseApi==null){
+                initTess();
+            }
+            // 开始调用Tess函数对图像进行识别
+            baseApi.setImage(bitmap);
+            return baseApi.getUTF8Text();
+
+//            val baseApi = TessBaseAPI()
+//            baseApi.setDebug(true)
+//            // 使用默认语言初始化BaseApi
+//            baseApi.init(
+//                    Configs.trainInitPath, "chi_sim"
+//            )
+//            baseApi.setImage(bitmap2)
+//
+//            // 获取返回值
+//            val recognizedText = baseApi.utF8Text
+//            baseApi.end()
+//            ToastUtils.showLong(recognizedText)
+//            return recognizedText
         }
     }
 

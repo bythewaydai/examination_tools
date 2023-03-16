@@ -3,6 +3,7 @@ package com.dl.dw;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
@@ -20,14 +21,18 @@ import android.view.WindowManager;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.blankj.utilcode.util.BusUtils;
 import com.blankj.utilcode.util.DeviceUtils;
 import com.blankj.utilcode.util.ImageUtils;
 import com.blankj.utilcode.util.ScreenUtils;
 import com.dl.dw.capture.ScreenCaptureService;
+import com.dl.dw.event.ScanResultEvent;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
@@ -35,12 +40,23 @@ import androidx.navigation.ui.NavigationUI;
 
 import com.dl.dw.databinding.ActivityMainBinding;
 
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
 
+    TextView showTextView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -61,8 +77,8 @@ public class MainActivity extends AppCompatActivity {
 
         checkPermission(this);
 
-        TextView textView= new TextView(this);
-        textView.setText("Hello World");
+        showTextView= new TextView(this);
+        showTextView.setText("Hello World");
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -71,7 +87,7 @@ public class MainActivity extends AppCompatActivity {
                 PixelFormat.TRANSLUCENT);
 
         WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        wm.addView(textView, params);
+        wm.addView(showTextView, params);
 
 
         binding.navView.postDelayed(new Runnable() {
@@ -84,10 +100,37 @@ public class MainActivity extends AppCompatActivity {
 //                Bitmap bitmap1 = view.getDrawingCache();
 //                ImageUtils.save2Album(bitmap1, Bitmap.CompressFormat.PNG);
                 takeScreenShot();
-                textView.setText("Hello World222");
+                showTextView.setText("Hello World222");
             }
         }, 4000);
 
+        //图文识别准备
+        if(PackageManager.PERMISSION_GRANTED ==
+                ContextCompat.checkSelfPermission(this, "android.permission.WRITE_EXTERNAL_STORAGE")&&
+                PackageManager.PERMISSION_GRANTED ==
+                        ContextCompat.checkSelfPermission(this, "android.permission.READ_EXTERNAL_STORAGE")){
+            prepareSDCardData();
+        }else{
+            ActivityCompat.requestPermissions(this, new String[]{"android.permission.WRITE_EXTERNAL_STORAGE",
+                    "android.permission.READ_EXTERNAL_STORAGE"}, 10);
+        }
+
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onMessageEvent(ScanResultEvent event) {
+//        showTextView.setText(event.getContent());
+    }
+    @Override
+    public void onStart() {
+        super.onStart();
+        EventBus.getDefault().register(this);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+//        EventBus.getDefault().unregister(this);
     }
 
     public static boolean checkPermission(Activity activity){
@@ -109,6 +152,57 @@ public class MainActivity extends AppCompatActivity {
         mMediaProjectionManager= (MediaProjectionManager)getApplication().getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         startActivityForResult(mMediaProjectionManager.createScreenCaptureIntent(), 1111);
     }
+
+
+    //*************************************图文识别准备*************************************
+    boolean initiated = false;
+    private void prepareSDCardData(){
+        File path =new File(ScreenCaptureService.trainInitPath+File.separator+"tessdata");
+        if (!path.exists()) {
+            path.mkdirs();
+        }
+        File file = new File(path, ScreenCaptureService.trainFileName);
+        if (!file.exists()) {
+            try {
+                file.createNewFile();
+                byte[] bytes = readRawTrainingData(this);
+                FileOutputStream fileOutputStream = new FileOutputStream(file);
+                fileOutputStream.write(bytes);
+                fileOutputStream.close();
+                initiated = true;
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            initiated = true;
+        }
+
+    }
+
+
+
+    private byte[] readRawTrainingData(Context context){
+        try {
+            InputStream fileInputStream = context.getResources()
+                    .openRawResource(R.raw.chi_sim);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] b = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = fileInputStream.read(b)) != -1) {
+                bos.write(b, 0, bytesRead);
+            }
+            fileInputStream.close();
+            return bos.toByteArray();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    //*************************************图文识别准备*************************************
 
     ImageReader mImageReader;
     int mWidthPixels=ScreenUtils.getScreenWidth();

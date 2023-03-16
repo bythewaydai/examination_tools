@@ -46,4 +46,10 @@ dependencies {
     //https://github.com/Blankj/AndroidUtilCode/blob/master/lib/utilcode/README-CN.md
     //小工具集
     implementation 'com.blankj:utilcodex:1.30.5'
+
+    // 图片文字识别
+    implementation 'com.rmtheis:tess-two:9.1.0'
+
+    // EventBus 事件总线 https://github.com/greenrobot/EventBus
+    implementation("org.greenrobot:eventbus:3.3.1")
 }
